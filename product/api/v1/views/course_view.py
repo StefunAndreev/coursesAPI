@@ -2,6 +2,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from api.v1.permissions import IsStudentOrIsAdmin, ReadOnlyOrIsAdmin
@@ -27,17 +28,23 @@ class LessonViewSet(viewsets.ModelViewSet):
             return LessonSerializer
         return CreateLessonSerializer
 
-    def get_сourse(self):
+    def get_course(self):
         """Получает курс по ID."""
         return get_object_or_404(Course, id=self.kwargs.get('course_id'))
 
     def perform_create(self, serializer):
         """Создает новый урок."""
-        serializer.save(course=self.get_сourse())
+        serializer.save(course=self.get_course())
 
     def get_queryset(self):
-        """Получает список всех уроков."""
-        return self.get_сourse().lessons.all()
+        """Возвращает уроки, только если у пользователя есть подписка."""
+        course = self.get_course()
+        if not (self.request.user.is_staff or Subscription.objects.filter(
+            user=self.request.user,
+            course=course,
+        ).exists()):
+            raise PermissionDenied('У вас нет активной подписки на этот курс.')
+        return course.lessons.all()
 
 
 class GroupViewSet(viewsets.ModelViewSet):
@@ -51,17 +58,17 @@ class GroupViewSet(viewsets.ModelViewSet):
             return GroupSerializer
         return CreateGroupSerializer
 
-    def get_сourse(self):
+    def get_course(self):
         """Получает курс по ID."""
         return get_object_or_404(Course, id=self.kwargs.get('course_id'))
 
     def perform_create(self, serializer):
         """Создает новую группу."""
-        serializer.save(course=self.get_сourse())
+        serializer.save(course=self.get_course())
 
     def get_queryset(self):
         """Получает список всех групп."""
-        return self.get_сourse().groups.all()
+        return self.get_course().groups.all()
 
 
 class CourseViewSet(viewsets.ModelViewSet):
